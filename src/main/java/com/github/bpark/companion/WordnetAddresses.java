@@ -20,6 +20,7 @@ package com.github.bpark.companion;
  */
 public enum WordnetAddresses {
 
+    ANALYSIS("wordnet.analysis"),
     SYNONYMS("wordnet.synonyms"),
     STEM("wordnet.stem");
 

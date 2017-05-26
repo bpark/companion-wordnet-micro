@@ -16,10 +16,16 @@
 package com.github.bpark.companion;
 
 
+import com.github.bpark.companion.codecs.TaggedTextCodec;
+import com.github.bpark.companion.codecs.WordnetAnalysisCodec;
+import com.github.bpark.companion.model.AnalyzedWord;
+import com.github.bpark.companion.model.PosType;
+import com.github.bpark.companion.model.TaggedText;
+import com.github.bpark.companion.model.WordnetAnalysis;
 import edu.mit.jwi.RAMDictionary;
 import edu.mit.jwi.data.ILoadPolicy;
 import edu.mit.jwi.item.*;
-import io.vertx.core.json.JsonArray;
+import edu.mit.jwi.morph.WordnetStemmer;
 import io.vertx.rxjava.core.AbstractVerticle;
 import io.vertx.rxjava.core.eventbus.EventBus;
 import io.vertx.rxjava.core.eventbus.Message;
@@ -30,6 +36,7 @@ import rx.Observable;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -47,8 +54,11 @@ public class WordnetVerticle extends AbstractVerticle {
 
         logger.info("starting wordnet verticle");
 
+        this.vertx.eventBus().getDelegate().registerDefaultCodec(TaggedText.class, new TaggedTextCodec());
+        this.vertx.eventBus().getDelegate().registerDefaultCodec(WordnetAnalysis.class, new WordnetAnalysisCodec());
+
         loadDictionary();
-        registerSynonyms();
+        registerAnalyzer();
 
     }
 
@@ -58,24 +68,74 @@ public class WordnetVerticle extends AbstractVerticle {
         dictionary.load();
     }
 
-    private void registerSynonyms() {
+    private void registerAnalyzer() {
         EventBus eventBus = vertx.eventBus();
 
-        MessageConsumer<String> consumer = eventBus.consumer(WordnetAddresses.SYNONYMS.getAddress());
-        Observable<Message<String>> observable = consumer.toObservable();
+        MessageConsumer<TaggedText> consumer = eventBus.consumer(WordnetAddresses.ANALYSIS.getAddress());
+        Observable<Message<TaggedText>> observable = consumer.toObservable();
         observable.subscribe(message -> {
-            String body = message.body();
+            TaggedText taggedText = message.body();
 
-            IIndexWord idxWord = dictionary.getIndexWord(body, POS.NOUN);
-            IWordID wordID = idxWord.getWordIDs().get(0); // 1st meaning
-            IWord word = dictionary.getWord(wordID);
-            ISynset synset = word.getSynset();
+            List<AnalyzedWord> analyzedWords = taggedText.zip().map(a -> analyzeWord(a.getA(), a.getB())).collect(Collectors.toList());
 
-            List<String> synonyms = synset.getWords().stream().map(IWord::getLemma).collect(Collectors.toList());
+            WordnetAnalysis wordnetAnalysis = new WordnetAnalysis(analyzedWords);
 
-            message.reply(new JsonArray(synonyms));
+            message.reply(wordnetAnalysis);
         });
-
     }
 
+    private AnalyzedWord analyzeWord(String word, String posTag) {
+
+        AnalyzedWord analyzedWord = null;
+
+        POS pos = PosType.byPennTag(posTag);
+
+        logger.info("word: {}, pennTag: {}", word, posTag);
+
+        if (pos != null) {
+
+            logger.info("evaluated pos: {}", pos.name());
+
+            String stem = findStem(word, pos);
+
+            logger.info("stem: {}", stem);
+
+            IIndexWord idxWord = dictionary.getIndexWord(stem, pos);
+
+            if (idxWord != null && idxWord.getWordIDs() != null && idxWord.getWordIDs().size() > 0) {
+
+                IWordID wordID = idxWord.getWordIDs().get(0); // 1st meaning
+                IWord dictionaryWord = dictionary.getWord(wordID);
+                ISynset synset = dictionaryWord.getSynset();
+
+                List<String> synonyms = synset.getWords().stream().map(IWord::getLemma).collect(Collectors.toList());
+
+                List<ISynsetID> hypernyms = synset.getRelatedSynsets(Pointer.HYPERNYM);
+
+                List<String> hypernymWords = hypernyms.stream()
+                        .map(h -> dictionary.getSynset(h).getWords())
+                        .flatMap(Collection::stream)
+                        .map(IWord::getLemma)
+                        .collect(Collectors.toList());
+
+                analyzedWord = new AnalyzedWord();
+                analyzedWord.setGloss(synset.getGloss());
+                analyzedWord.setStem(stem);
+                analyzedWord.setHypernyms(hypernymWords);
+                analyzedWord.setLemma(dictionaryWord.getLemma());
+                analyzedWord.setLexicalName(synset.getLexicalFile().getName());
+                analyzedWord.setLexialDescription(synset.getLexicalFile().getDescription());
+                analyzedWord.setSynonyms(synonyms);
+            }
+        }
+
+        return analyzedWord;
+    }
+
+    private String findStem(String word, POS pos) {
+        WordnetStemmer stemmer = new WordnetStemmer(dictionary);
+        List<String> stems = stemmer.findStems(word, pos);
+
+        return stems != null && stems.size() > 0 ? stems.get(0) : word;
+    }
 }

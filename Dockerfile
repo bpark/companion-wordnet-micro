@@ -1,4 +1,4 @@
-FROM alpine-jre-wordnet
+FROM ksparber/alpine-jre-wordnet
 
 ENV JAVA_APP_JAR companion-wordnet-micro-1.0-SNAPSHOT-fat.jar
 
