@@ -16,8 +16,6 @@
 package com.github.bpark.companion;
 
 
-import com.github.bpark.companion.codecs.TaggedTextCodec;
-import com.github.bpark.companion.codecs.WordnetAnalysisCodec;
 import com.github.bpark.companion.model.AnalyzedWord;
 import com.github.bpark.companion.model.PosType;
 import com.github.bpark.companion.model.TaggedText;
@@ -26,6 +24,7 @@ import edu.mit.jwi.RAMDictionary;
 import edu.mit.jwi.data.ILoadPolicy;
 import edu.mit.jwi.item.*;
 import edu.mit.jwi.morph.WordnetStemmer;
+import io.vertx.core.json.Json;
 import io.vertx.rxjava.core.AbstractVerticle;
 import io.vertx.rxjava.core.eventbus.EventBus;
 import io.vertx.rxjava.core.eventbus.Message;
@@ -47,15 +46,14 @@ public class WordnetVerticle extends AbstractVerticle {
 
     private static final Logger logger = LoggerFactory.getLogger(WordnetVerticle.class);
 
+    private static final String ADDRESS = "wordnet.analysis";
+
     private RAMDictionary dictionary;
 
     @Override
     public void start() throws Exception {
 
         logger.info("starting wordnet verticle");
-
-        this.vertx.eventBus().getDelegate().registerDefaultCodec(TaggedText.class, new TaggedTextCodec());
-        this.vertx.eventBus().getDelegate().registerDefaultCodec(WordnetAnalysis.class, new WordnetAnalysisCodec());
 
         loadDictionary();
         registerAnalyzer();
@@ -71,16 +69,17 @@ public class WordnetVerticle extends AbstractVerticle {
     private void registerAnalyzer() {
         EventBus eventBus = vertx.eventBus();
 
-        MessageConsumer<TaggedText> consumer = eventBus.consumer(WordnetAddresses.ANALYSIS.getAddress());
-        Observable<Message<TaggedText>> observable = consumer.toObservable();
+        MessageConsumer<String> consumer = eventBus.consumer(ADDRESS);
+        Observable<Message<String>> observable = consumer.toObservable();
         observable.subscribe(message -> {
-            TaggedText taggedText = message.body();
+            TaggedText taggedText = Json.decodeValue(message.body(), TaggedText.class);
 
-            List<AnalyzedWord> analyzedWords = taggedText.zip().map(a -> analyzeWord(a.getA(), a.getB())).collect(Collectors.toList());
+            List<AnalyzedWord> analyzedWords =
+                    taggedText.zip().map(a -> analyzeWord(a.getA(), a.getB())).collect(Collectors.toList());
 
             WordnetAnalysis wordnetAnalysis = new WordnetAnalysis(analyzedWords);
 
-            message.reply(wordnetAnalysis);
+            message.reply(Json.encode(wordnetAnalysis));
         });
     }
 
