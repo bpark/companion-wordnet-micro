@@ -16,9 +16,9 @@
 package com.github.bpark.companion;
 
 
+import com.github.bpark.companion.input.AnalyzedText;
 import com.github.bpark.companion.model.AnalyzedWord;
 import com.github.bpark.companion.model.PosType;
-import com.github.bpark.companion.model.TaggedText;
 import com.github.bpark.companion.model.WordnetAnalysis;
 import edu.mit.jwi.RAMDictionary;
 import edu.mit.jwi.data.ILoadPolicy;
@@ -32,9 +32,11 @@ import io.vertx.rxjava.core.eventbus.MessageConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import rx.Observable;
+import rx.Single;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -47,6 +49,9 @@ public class WordnetVerticle extends AbstractVerticle {
     private static final Logger logger = LoggerFactory.getLogger(WordnetVerticle.class);
 
     private static final String ADDRESS = "wordnet.analysis";
+
+    private static final String NLP_KEY = "nlp";
+    private static final String WORDNET_KEY = "wordnet";
 
     private RAMDictionary dictionary;
 
@@ -72,14 +77,23 @@ public class WordnetVerticle extends AbstractVerticle {
         MessageConsumer<String> consumer = eventBus.consumer(ADDRESS);
         Observable<Message<String>> observable = consumer.toObservable();
         observable.subscribe(message -> {
-            TaggedText taggedText = Json.decodeValue(message.body(), TaggedText.class);
 
-            List<AnalyzedWord> analyzedWords =
-                    taggedText.zip().map(a -> analyzeWord(a.getA(), a.getB())).collect(Collectors.toList());
+            String id = message.body();
 
-            WordnetAnalysis wordnetAnalysis = new WordnetAnalysis(analyzedWords);
+            readMessage(id).flatMap(analyzedText -> {
 
-            message.reply(Json.encode(wordnetAnalysis));
+                List<WordnetAnalysis> analyses = new ArrayList<>();
+
+                analyzedText.getSentences().forEach(taggedText -> {
+                    List<AnalyzedWord> analyzedWords =
+                            taggedText.zip().map(a -> analyzeWord(a.getA(), a.getB())).collect(Collectors.toList());
+
+                    analyses.add(new WordnetAnalysis(analyzedWords));
+                });
+
+                return Observable.just(analyses);
+            }).flatMap(analyses -> saveMessage(id, analyses)).subscribe(a -> message.reply(id));
+
         });
     }
 
@@ -136,5 +150,18 @@ public class WordnetVerticle extends AbstractVerticle {
         List<String> stems = stemmer.findStems(word, pos);
 
         return stems != null && stems.size() > 0 ? stems.get(0) : word;
+    }
+
+    private Observable<AnalyzedText> readMessage(String id) {
+        return vertx.sharedData().<String, String>rxGetClusterWideMap(id)
+                .flatMap(map -> map.rxGet(NLP_KEY))
+                .flatMap(content -> Single.just(Json.decodeValue(content, AnalyzedText.class)))
+                .toObservable();
+    }
+
+    private Observable<Void> saveMessage(String id, List<WordnetAnalysis> analyses) {
+        return vertx.sharedData().<String, String>rxGetClusterWideMap(id)
+                .flatMap(map -> map.rxPut(WORDNET_KEY, Json.encode(analyses)))
+                .toObservable();
     }
 }

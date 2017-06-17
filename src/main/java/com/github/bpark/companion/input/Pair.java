@@ -1,4 +1,4 @@
-package com.github.bpark.companion.model;
+package com.github.bpark.companion.input;
 
 public class Pair<A, B> {
 
