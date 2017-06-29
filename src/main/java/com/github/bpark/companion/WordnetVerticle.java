@@ -22,7 +22,13 @@ import com.github.bpark.companion.model.PosType;
 import com.github.bpark.companion.model.WordnetAnalysis;
 import edu.mit.jwi.RAMDictionary;
 import edu.mit.jwi.data.ILoadPolicy;
-import edu.mit.jwi.item.*;
+import edu.mit.jwi.item.IIndexWord;
+import edu.mit.jwi.item.ISynset;
+import edu.mit.jwi.item.ISynsetID;
+import edu.mit.jwi.item.IWord;
+import edu.mit.jwi.item.IWordID;
+import edu.mit.jwi.item.POS;
+import edu.mit.jwi.item.Pointer;
 import edu.mit.jwi.morph.WordnetStemmer;
 import io.vertx.core.json.Json;
 import io.vertx.rxjava.core.AbstractVerticle;
@@ -60,8 +66,22 @@ public class WordnetVerticle extends AbstractVerticle {
 
         logger.info("starting wordnet verticle");
 
-        loadDictionary();
-        registerAnalyzer();
+        vertx.<Void>rxExecuteBlocking(future -> {
+
+            try {
+
+                loadDictionary();
+
+                future.complete();
+
+            } catch (IOException e) {
+                future.fail(e);
+            }
+
+        }).toObservable().subscribe(
+                success -> registerAnalyzer(),
+                error -> logger.error("faild to load dictionary!", error)
+        );
 
     }
 
