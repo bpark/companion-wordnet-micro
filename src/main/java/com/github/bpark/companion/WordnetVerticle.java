@@ -19,6 +19,7 @@ package com.github.bpark.companion;
 import com.github.bpark.companion.input.AnalyzedText;
 import com.github.bpark.companion.model.AnalyzedWord;
 import com.github.bpark.companion.model.PosType;
+import com.github.bpark.companion.model.Sentence;
 import com.github.bpark.companion.model.WordnetAnalysis;
 import edu.mit.jwi.RAMDictionary;
 import edu.mit.jwi.data.ILoadPolicy;
@@ -102,13 +103,13 @@ public class WordnetVerticle extends AbstractVerticle {
 
             readMessage(id).flatMap(analyzedText -> {
 
-                List<WordnetAnalysis> analyses = new ArrayList<>();
+                List<Sentence> analyses = new ArrayList<>();
 
                 analyzedText.getSentences().forEach(taggedText -> {
                     List<AnalyzedWord> analyzedWords =
                             taggedText.zip().map(a -> analyzeWord(a.getA(), a.getB())).collect(Collectors.toList());
 
-                    analyses.add(new WordnetAnalysis(analyzedWords));
+                    analyses.add(new Sentence(analyzedWords));
                 });
 
                 return Observable.just(analyses);
@@ -179,9 +180,9 @@ public class WordnetVerticle extends AbstractVerticle {
                 .toObservable();
     }
 
-    private Observable<Void> saveMessage(String id, List<WordnetAnalysis> analyses) {
+    private Observable<Void> saveMessage(String id, List<Sentence> analyses) {
         return vertx.sharedData().<String, String>rxGetClusterWideMap(id)
-                .flatMap(map -> map.rxPut(WORDNET_KEY, Json.encode(analyses)))
+                .flatMap(map -> map.rxPut(WORDNET_KEY, Json.encode(new WordnetAnalysis(analyses))))
                 .toObservable();
     }
 }

@@ -4,13 +4,13 @@ import java.util.List;
 
 public class WordnetAnalysis {
 
-    private List<AnalyzedWord> analyzedWords;
+    private List<Sentence> sentences;
 
-    public WordnetAnalysis(List<AnalyzedWord> analyzedWords) {
-        this.analyzedWords = analyzedWords;
+    public WordnetAnalysis(List<Sentence> sentences) {
+        this.sentences = sentences;
     }
 
-    public List<AnalyzedWord> getAnalyzedWords() {
-        return analyzedWords;
+    public List<Sentence> getSentences() {
+        return sentences;
     }
 }
