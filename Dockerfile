@@ -9,4 +9,4 @@ RUN chmod 777 /app/
 
 WORKDIR /app/
 ENTRYPOINT ["sh", "-c"]
-CMD ["exec java -Xmx128m -jar $JAVA_APP_JAR -cluster"]
+CMD ["exec java -jar $JAVA_APP_JAR -cluster"]

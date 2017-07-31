@@ -21,8 +21,7 @@ import com.github.bpark.companion.model.AnalyzedWord;
 import com.github.bpark.companion.model.PosType;
 import com.github.bpark.companion.model.Sentence;
 import com.github.bpark.companion.model.WordnetAnalysis;
-import edu.mit.jwi.RAMDictionary;
-import edu.mit.jwi.data.ILoadPolicy;
+import edu.mit.jwi.Dictionary;
 import edu.mit.jwi.item.IIndexWord;
 import edu.mit.jwi.item.ISynset;
 import edu.mit.jwi.item.ISynsetID;
@@ -60,7 +59,7 @@ public class WordnetVerticle extends AbstractVerticle {
     private static final String NLP_KEY = "nlp";
     private static final String WORDNET_KEY = "wordnet";
 
-    private RAMDictionary dictionary;
+    private Dictionary dictionary;
 
     @Override
     public void start() throws Exception {
@@ -87,9 +86,9 @@ public class WordnetVerticle extends AbstractVerticle {
     }
 
     private void loadDictionary() throws IOException {
-        dictionary = new RAMDictionary(new File("/wordnet/dict"), ILoadPolicy.NO_LOAD);
+        dictionary = new Dictionary(new File("/wordnet/dict"));
         dictionary.open();
-        dictionary.load();
+        //dictionary.load();
     }
 
     private void registerAnalyzer() {
